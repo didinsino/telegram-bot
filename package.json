@@ -1,6 +1,6 @@
 {
   "name": "@didinsino/telegram-bot",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Simple and lightweight NodeJS library for creating Telegram bots",
   "main": "dist/index.js",
   "type": "commonjs",
