@@ -9,9 +9,10 @@ const promise_events_1 = __importDefault(require("promise-events"));
 const chunk_1 = __importDefault(require("lodash/chunk"));
 const states = {
     httpClient: null,
-    formData: null,
+    FormData: null,
     fs: null,
     path: null,
+    hasSigintListener: false,
 };
 class TelegramBot {
     constructor(token) {
@@ -20,6 +21,7 @@ class TelegramBot {
         this._updateOffset = 0;
         this._pollingTimer = null;
         this._hasErrorCatcher = false;
+        this._requestTimeout = 30000;
         this.token = token;
         this._event = new promise_events_1.default();
     }
@@ -31,6 +33,9 @@ class TelegramBot {
             });
         }
         return states.httpClient;
+    }
+    set requestTimeout(timeoutValue) {
+        this._requestTimeout = timeoutValue;
     }
     on(updateType, callback) {
         return this._event.on(updateType, callback);
@@ -86,10 +91,13 @@ class TelegramBot {
     }
     async startPolling(options) {
         try {
-            process.on('SIGINT', () => {
-                this.stopPolling();
-                process.exit();
-            });
+            if (!states.hasSigintListener) {
+                process.on('SIGINT', () => {
+                    this.stopPolling();
+                    process.exit();
+                });
+                states.hasSigintListener = true;
+            }
             const updates = await this.getUpdates(options);
             if (Array.isArray(updates)) {
                 await Promise.all(updates.map(update => this.handleUpdate(update)));
@@ -254,21 +262,21 @@ class TelegramBot {
                 });
                 return resp.result;
             }
-            if (states.formData == null) {
-                const FormData = require('form-data');
-                states.formData = new FormData();
+            if (states.FormData == null) {
+                states.FormData = require('form-data');
             }
+            const formData = new states.FormData();
             const methodName = `send${type.charAt(0).toUpperCase() + type.slice(1)}`;
             for (const key in options || {}) {
                 if (key === 'chat_id' || key === type)
                     continue;
                 if (key === 'reply_markup') {
-                    states.formData.append(key, JSON.stringify(options?.[key]));
+                    formData.append(key, JSON.stringify(options?.[key]));
                     continue;
                 }
-                states.formData.append(key, options?.[key]);
+                formData.append(key, options?.[key]);
             }
-            states.formData.append('chat_id', chatId);
+            formData.append('chat_id', chatId);
             if (typeof message === 'string') {
                 if ((message.includes('/') || message.includes('\\')) &&
                     !message.startsWith('https://') &&
@@ -281,16 +289,16 @@ class TelegramBot {
                     }
                     const fileName = options?.file_name || states.path.basename(message);
                     message = states.fs.createReadStream(message);
-                    states.formData.append(type, message, fileName);
+                    formData.append(type, message, fileName);
                 }
                 else {
-                    states.formData.append(type, message);
+                    formData.append(type, message);
                 }
             }
             else {
-                states.formData.append(type, message, options?.file_name || type);
+                formData.append(type, message, options?.file_name || type);
             }
-            const resp = await this.httpRequest(methodName, states.formData);
+            const resp = await this.httpRequest(methodName, formData);
             return resp.result;
         }
         catch (error) {
@@ -332,6 +340,7 @@ class TelegramBot {
         try {
             const resp = await this.httpClient.request({
                 ...otherConfig,
+                timeout: this._requestTimeout,
                 method: reqMethod,
                 url: botMethod,
                 data,

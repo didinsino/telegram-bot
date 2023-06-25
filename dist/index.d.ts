@@ -9,8 +9,10 @@ export declare class TelegramBot {
     private _updateOffset;
     private _pollingTimer;
     private _hasErrorCatcher;
+    private _requestTimeout;
     constructor(token: string);
     get httpClient(): AxiosInstance;
+    set requestTimeout(timeoutValue: number);
     on(updateType: UpdateType, callback: (context: UpdateContext) => void): Promise<any>;
     start(callback: (context: UpdateContext) => void): Promise<any>;
     command(commandStr: string, callback: (context: UpdateContext) => void): Promise<any>;
